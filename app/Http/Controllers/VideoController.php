@@ -61,9 +61,22 @@ public function generate(Request $request) {
         // Cek jika API mengembalikan error alih-alih candidates (misal: API key salah, limit, atau diblokir)
         if (!isset($data['candidates'])) {
             $errorDetail = isset($data['error']['message']) ? $data['error']['message'] : json_encode($data);
-            throw new \Exception('API Response Error: ' . $errorDetail);
-        }
+            
+            // Terjemahkan pesan error yang umum agar lebih ramah pengguna
+            if (stripos($errorDetail, 'high demand') !== false) {
+                $userFriendlyMessage = "Server AI sedang sangat sibuk (High Demand). Mohon tunggu sekitar 1-2 menit dan tekan tombol Generate lagi.";
+            } elseif (stripos($errorDetail, 'API key not valid') !== false) {
+                $userFriendlyMessage = "Konfigurasi API Key tidak valid. Silakan periksa pengaturan sistem.";
+            } elseif (stripos($errorDetail, 'quota') !== false) {
+                $userFriendlyMessage = "Kuota penggunaan AI Anda telah habis untuk sementara waktu.";
+            } elseif (stripos($errorDetail, 'safety') !== false || stripos($errorDetail, 'block') !== false) {
+                $userFriendlyMessage = "Permintaan diblokir oleh sistem keamanan AI (mungkin mengandung kata sensitif). Silakan ubah topik Anda.";
+            } else {
+                $userFriendlyMessage = "Gagal terhubung ke AI: " . $errorDetail;
+            }
 
+            throw new \Exception($userFriendlyMessage);
+        }
         $resultText = $data['candidates'][0]['content']['parts'][0]['text'];
         
         // Hapus bungkus markdown ```json ... ``` jika Gemini mengembalikannya dalam format markdown
@@ -92,7 +105,7 @@ public function generate(Request $request) {
 
         return back();
     } catch (\Exception $e) {
-        return back()->withErrors(['error' => 'Gemini API Error: ' . $e->getMessage()]);
+        return back()->withErrors(['error' => $e->getMessage()]);
     }
 }
 
